@@ -15,6 +15,9 @@ object ReplicasPerRSE {
             println("date has to be specified")
         }
 
+        val base_dir = "/user/rucio01"
+        val dumps_dir = "dumps"
+        val reports_dir = "reports"
         val date = args(0)
 
         val get_path = udf((scope:String, name:String) => {
@@ -33,9 +36,15 @@ object ReplicasPerRSE {
         spark.conf.set("spark.dynamicAllocation.maxExecutors", "200")
         import spark.implicits._
 
-        val replicas = spark.read.format("avro").load("/user/rucio01/dumps/" + date + "/replicas")
+        val replicas = spark
+          .read
+          .format("avro")
+          .load("%s/%s/%s/replicas".format(base_dir, dumps_dir, date))
         
-        val rses = spark.read.format("avro").load("/user/rucio01/dumps/" + date + "/rses")
+        val rses = spark
+          .read
+          .format("avro")
+          .load("%s/%s/%s/rses".format(base_dir, dumps_dir, date))
 
         val join_replicas_rses = replicas.as("replicas")
           .join(
@@ -65,7 +74,7 @@ object ReplicasPerRSE {
         val union_all = add_path.union(filter_nondet)
         val ordered = union_all.orderBy(asc("path"))
 
-        val output_path = "/user/rucio01/tmp/" + date + "/replicas_per_rse"
+        val output_path = "%s/%s/%s/replicas_per_rse".format(base_dir, reports_dir, date)
         ordered
           .repartition($"rse")
           .write
@@ -73,7 +82,6 @@ object ReplicasPerRSE {
           .mode("overwrite")
           .option("delimiter", "\t")
           .option("compression","bzip2")
-          .option("quote", "\u0000")
           .option("timestampFormat", "yyyy-MM-dd HH:mm:ss")
           .csv(output_path)
 

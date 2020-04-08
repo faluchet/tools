@@ -13,6 +13,9 @@ object ConsistencyDatasets {
             System.exit(1)
         }
 
+        val base_dir = "/user/rucio01"
+        val dumps_dir = "dumps"
+        val reports_dir = "reports"
         val date = args(0)
 
         val spark = SparkSession.builder.appName("Rucio Consistency Datasets").getOrCreate()
@@ -23,7 +26,7 @@ object ConsistencyDatasets {
         val dslocks = spark
           .read
           .format("avro")
-          .load("/user/rucio01/dumps/" + date + "/dslocks")
+          .load("%s/%s/%s/dslocks".format(base_dir, dumps_dir, date))
           .select(
             "scope",
             "name",
@@ -40,12 +43,12 @@ object ConsistencyDatasets {
         val rses = spark
           .read
           .format("avro")
-          .load("/user/rucio01/dumps/" + date + "/rses")
+          .load("%s/%s/%s/rses".format(base_dir, dumps_dir, date))
         
         val dids = spark
           .read
           .format("avro")
-          .load("/user/rucio01/dumps/" + date + "/dids")
+          .load("%s/%s/%s/dids".format(base_dir, dumps_dir, date))
           .select(
             col("scope"),
             col("name"),
@@ -88,7 +91,8 @@ object ConsistencyDatasets {
         val get_bytes = group_reps.as("group_reps")
           .join(
             dids.as("dids"),
-            (col("group_reps.scope") === col("dids.scope")) && (col("group_reps.name") === col("dids.name"))
+            (col("group_reps.scope") === col("dids.scope"))
+            && (col("group_reps.name") === col("dids.name"))
           )
           .select(
             "group_reps.rse",
@@ -112,7 +116,8 @@ object ConsistencyDatasets {
           .as("get_bytes")
           .join(
             count_datasets.as("count_datasets"),
-            (col("get_bytes.scope") === col("count_datasets.scope")) && (col("get_bytes.name") === col("count_datasets.name"))
+            (col("get_bytes.scope") === col("count_datasets.scope"))
+            && (col("get_bytes.name") === col("count_datasets.name"))
           )
           .select(
             "get_bytes.rse",
@@ -141,7 +146,7 @@ object ConsistencyDatasets {
             col("updated_at")
           )
 
-        val output_path = "/user/rucio01/tmp/" + date + "/consistency_datasets"
+        val output_path = "%s/%s/%s/consistency_datasets".format(base_dir, reports_dir, date)
         get_output
             .repartition($"rse")
             .write
@@ -154,19 +159,21 @@ object ConsistencyDatasets {
         val stageDirs = fs.listStatus(new Path(output_path)).map( _.getPath.toString)
         stageDirs.foreach( dir => fs.rename(new Path(dir),new Path(dir.replaceAll("rse=",""))))
 
+        // specific dump for Hammercloud testing. Only needed for ATLAS. Can be removed otherwise.
         val full_output = filter_okay
           .select("rse", "scope", "name")
           .filter(!col("name").like("%_dis%"))
           .filter(!col("name").like("%_sub%"))
           .orderBy(asc("rse"), asc("scope"), asc("name"))
 
+        val full_output_path = "%s/%s/%s/consistency_datasets_full.bz2".format(base_dir, reports_dir, date)
         full_output
           .repartition(1)
           .write
           .mode("overwrite")
           .option("delimiter", "\t")
           .option("compression","bzip2")
-          .csv("/user/rucio01/tmp/" + date + "/consistency_datasets_full.bz2")
+          .csv(full_output_path)
 
         spark.stop()
     }
