@@ -17,7 +17,7 @@ object ReplicasPerRSE {
 
         val base_dir = "/user/rucio01"
         val dumps_dir = "dumps"
-        val reports_dir = "reports"
+        val reports_dir = "tmp/reports"
         val date = args(0)
 
         val get_path = udf((scope:String, name:String) => {
@@ -49,37 +49,67 @@ object ReplicasPerRSE {
         val join_replicas_rses = replicas.as("replicas")
           .join(
             rses.as("rses"),
-            col("replicas.RSE_ID") === col("rses.ID")
+            $"replicas.RSE_ID" === $"rses.ID"
           )
           .select(
-            col("rses.rse"),
-            col("rses.rse").as("_rse"),
-            col("replicas.scope"),
-            col("replicas.name"),
-            col("replicas.adler32"),
-            col("replicas.bytes"),
-            col("replicas.created_at").divide(1000).cast(TimestampType),
-            col("replicas.path"),
-            col("replicas.updated_at").divide(1000).cast(TimestampType),
-            col("replicas.state"),
-            col("replicas.accessed_at").divide(1000).cast(TimestampType),
-            col("replicas.tombstone").divide(1000).cast(TimestampType)
+            $"rses.rse".as("rse"),
+            $"rses.rse".as("_rse"),
+            $"replicas.scope".as("scope"),
+            $"replicas.name".as("name"),
+            $"replicas.adler32".as("adler32"),
+            $"replicas.bytes".as("bytes"),
+            $"replicas.created_at".divide(1000).cast(TimestampType).as("created_at"),
+            $"replicas.path".as("path"),
+            $"replicas.updated_at".divide(1000).cast(TimestampType).as("updated_at"),
+            $"replicas.state".as("state"),
+            $"replicas.accessed_at".divide(1000).cast(TimestampType).as("accessed_at"),
+            $"replicas.tombstone".divide(1000).cast(TimestampType).as("tombstone")
           )
 
         val filter_det = join_replicas_rses.filter("path is null")
         val filter_nondet = join_replicas_rses.filter("path is not null")
 
-        val add_path = filter_det.withColumn("path", get_path(col("replicas.scope"), col("replicas.name")))
+        val add_path = filter_det.withColumn("path", get_path($"scope", $"name"))
 
         val union_all = add_path.union(filter_nondet)
-        val ordered = union_all.orderBy(asc("path"))
+
+        val count_replicas = replicas
+          .select(
+            "scope",
+            "name"
+          )
+          .groupBy("scope", "name")
+          .count()
+
+        val add_replicas_count = union_all.as("reps")
+          .join(
+            count_replicas.as("count"),
+            $"reps.scope" === $"count.scope" &&
+            $"reps.name" === $"count.name"
+          )
+          .select(
+            "reps.rse",
+            "reps._rse",
+            "reps.scope",
+            "reps.name",
+            "reps.adler32",
+            "reps.bytes",
+            "reps.created_at",
+            "reps.path",
+            "reps.updated_at",
+            "reps.state",
+            "reps.accessed_at",
+            "reps.tombstone",
+            "count.count"
+          )
+
+        val ordered = add_replicas_count.orderBy(asc("path"))
 
         val output_path = "%s/%s/%s/replicas_per_rse".format(base_dir, reports_dir, date)
         ordered
           .repartition($"rse")
           .write
           .partitionBy("rse")
-          .mode("overwrite")
           .option("delimiter", "\t")
           .option("compression","bzip2")
           .option("timestampFormat", "yyyy-MM-dd HH:mm:ss")

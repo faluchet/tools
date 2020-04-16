@@ -50,16 +50,15 @@ object ConsistencyDatasets {
           .format("avro")
           .load("%s/%s/%s/dids".format(base_dir, dumps_dir, date))
           .select(
-            col("scope"),
-            col("name"),
-            coalesce(col("bytes"),
-            lit(0)).as("bytes")
+            $"scope",
+            $"name",
+            coalesce($"bytes", lit(0)).as("bytes")
           )
 
         val join_reps_rses = dslocks.as("dslocks")
           .join(
             rses.as("rses"),
-            col("dslocks.RSE_ID") === col("rses.ID")
+            $"dslocks.RSE_ID" === $"rses.ID"
           )
           .select(
             "rses.rse",
@@ -80,7 +79,7 @@ object ConsistencyDatasets {
           .orderBy(asc("created_at"))
           .groupBy("scope", "name", "rse")
           .agg(
-            collect_list(col("account")).as("account"),
+            collect_list($"account").as("account"),
             max("bytes").as("bytes"),
             min("created_at").as("created_at"),
             max("accessed_at").as("accessed_at"),
@@ -91,8 +90,8 @@ object ConsistencyDatasets {
         val get_bytes = group_reps.as("group_reps")
           .join(
             dids.as("dids"),
-            (col("group_reps.scope") === col("dids.scope"))
-            && (col("group_reps.name") === col("dids.name"))
+            $"group_reps.scope" === $"dids.scope" &&
+            $"group_reps.name" === $"dids.name"
           )
           .select(
             "group_reps.rse",
@@ -116,8 +115,8 @@ object ConsistencyDatasets {
           .as("get_bytes")
           .join(
             count_datasets.as("count_datasets"),
-            (col("get_bytes.scope") === col("count_datasets.scope"))
-            && (col("get_bytes.name") === col("count_datasets.name"))
+            $"get_bytes.scope" === $"count_datasets.scope" &&
+            $"get_bytes.name" === $"count_datasets.name"
           )
           .select(
             "get_bytes.rse",
@@ -134,16 +133,16 @@ object ConsistencyDatasets {
 
         val get_output = join_reps_all
           .select(
-            col("rse"),
-            col("rse").as("_rse"),
-            col("scope"),
-            col("name"),
-            concat_ws(",", col("account")),
-            col("bytes"),
-            col("created_at"),
-            col("accessed_at"),concat_ws(",", col("rule_id")),
-            col("count"),
-            col("updated_at")
+            $"rse",
+            $"rse".as("_rse"),
+            $"scope",
+            $"name",
+            concat_ws(",", $"account"),
+            $"bytes",
+            $"created_at",
+            $"accessed_at",concat_ws(",", $"rule_id"),
+            $"count",
+            $"updated_at"
           )
 
         val output_path = "%s/%s/%s/consistency_datasets".format(base_dir, reports_dir, date)
@@ -151,7 +150,6 @@ object ConsistencyDatasets {
             .repartition($"rse")
             .write
             .partitionBy("rse")
-            .mode("overwrite")
             .option("delimiter", "\t")
             .csv(output_path)
 
@@ -162,15 +160,14 @@ object ConsistencyDatasets {
         // specific dump for Hammercloud testing. Only needed for ATLAS. Can be removed otherwise.
         val full_output = filter_okay
           .select("rse", "scope", "name")
-          .filter(!col("name").like("%_dis%"))
-          .filter(!col("name").like("%_sub%"))
+          .filter(!$"name".like("%_dis%"))
+          .filter(!$"name".like("%_sub%"))
           .orderBy(asc("rse"), asc("scope"), asc("name"))
 
         val full_output_path = "%s/%s/%s/consistency_datasets_full.bz2".format(base_dir, reports_dir, date)
         full_output
           .repartition(1)
           .write
-          .mode("overwrite")
           .option("delimiter", "\t")
           .option("compression","bzip2")
           .csv(full_output_path)

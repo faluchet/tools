@@ -19,7 +19,7 @@ object DatasetsPerRSE {
         val reports_dir = "reports"
         val date = args(0)
 
-        val spark = SparkSession.builder.appName("Rucio Consistency Datasets").getOrCreate()
+        val spark = SparkSession.builder.appName("Rucio Dataset Per RSE").getOrCreate()
         import spark.implicits._
         spark.conf.set("spark.sql.session.timeZone", "UTC")
 
@@ -67,7 +67,9 @@ object DatasetsPerRSE {
           .as("reps")
           .join(
             dslocks.as("locks"),
-            (col("reps.scope") === col("locks.scope")) && (col("reps.name") === col("locks.name")) && (col("reps.rse_id") === col("locks.rse_id")),
+            $"reps.scope" === $"locks.scope" &&
+            $"reps.name" === $"locks.name" &&
+            $"reps.rse_id" === $"locks.rse_id",
             "leftouter"
           )
           .select(
@@ -88,7 +90,7 @@ object DatasetsPerRSE {
           as("reps")
           .join(
             rses.as("rses"),
-            col("reps.RSE_ID") === col("rses.ID")
+            $"reps.RSE_ID" === $"rses.ID"
           )
           .select(
             "rses.rse",
@@ -108,7 +110,7 @@ object DatasetsPerRSE {
           .orderBy(asc("ds_created_at"))
           .groupBy("scope", "name", "rse")
           .agg(
-            collect_list(col("account")).as("account"),
+            collect_list($"account").as("account"),
             max("bytes").as("bytes"),
             min("created_at").as("created_at"),
             max("updated_at").as("updated_at"),
@@ -119,17 +121,17 @@ object DatasetsPerRSE {
 
         val get_output = group_reps
           .select(
-            col("rse"),
-            col("rse").as("_rse"),
-            col("scope"),
-            col("name"),
-            concat_ws(",", col("account")).as("account"),
-            col("bytes"),
-            col("created_at"),
-            col("updated_at"),
-            col("accessed_at"),
-            concat_ws(",", col("rule_id")),
-            col("state")
+            $"rse",
+            $"rse".as("_rse"),
+            $"scope",
+            $"name",
+            concat_ws(",", $"account").as("account"),
+            $"bytes",
+            $"created_at",
+            $"updated_at",
+            $"accessed_at",
+            concat_ws(",", $"rule_id"),
+            $"state"
           )
           .withColumn("account", when($"account" === "", "None").otherwise($"account"))
           .withColumn("bytes", when($"bytes".isNull, lit(0)).otherwise($"bytes"))
@@ -144,7 +146,6 @@ object DatasetsPerRSE {
           .repartition($"rse")
           .write
           .partitionBy("rse")
-          .mode("overwrite")
           .option("delimiter", "\t")
           .option("timestampFormat", "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
           .csv(output_path)
