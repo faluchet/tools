@@ -147,11 +147,10 @@ public class GetFileFromHDFS extends HttpServlet {
     }
 
     private String generatePath(String rse, String date) {
-        StringBuffer path = new StringBuffer("/user/rucio01/tmp/");
+        StringBuffer path = new StringBuffer("/user/rucio01/reports/");
         path.append(date);
         path.append("/replicas_per_rse/");
         path.append(rse);
-        path.append("/");
         return path.toString();
     }
 

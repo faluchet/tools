@@ -17,7 +17,7 @@ object ReplicasPerRSE {
 
         val base_dir = "/user/rucio01"
         val dumps_dir = "dumps"
-        val reports_dir = "tmp/reports"
+        val reports_dir = "reports"
         val date = args(0)
 
         val get_path = udf((scope:String, name:String) => {

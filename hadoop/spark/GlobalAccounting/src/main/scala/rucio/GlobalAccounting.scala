@@ -455,8 +455,8 @@ object GlobalAccounting {
           .select(
             $"reps.dscope".as("scope"),
             $"reps.dname".as("name"),
-            $"dids.length".as("length"),
-            $"dids.bytes".as("bytes"),
+            coalesce($"dids.length", lit(0)),
+            coalesce($"dids.bytes", lit(0)),
             $"reps.prim_t0_files",
             $"reps.prim_t1_files",
             $"reps.prim_t2_files",
@@ -488,7 +488,7 @@ object GlobalAccounting {
             $"dids.stream_name",
             $"dids.version",
             $"dids.campaign",
-            $"dids.events"
+            coalesce($"dids.events", lit(0))
           )
           .orderBy(asc("scope"), asc("name"))
 
