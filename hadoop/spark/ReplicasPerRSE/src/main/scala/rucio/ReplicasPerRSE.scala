@@ -5,7 +5,7 @@ import java.security.MessageDigest
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.SparkContext._ 
-import org.apache.spark.sql.functions.{col, udf, asc}
+import org.apache.spark.sql.functions.{col, udf, asc, lit, coalesce}
 import org.apache.spark.sql.types.TimestampType
 import org.apache.hadoop.fs.{FileSystem,Path}
 
@@ -74,6 +74,7 @@ object ReplicasPerRSE {
         val union_all = add_path.union(filter_nondet)
 
         val count_replicas = replicas
+          .filter($"state" === "A")
           .select(
             "scope",
             "name"
@@ -85,22 +86,23 @@ object ReplicasPerRSE {
           .join(
             count_replicas.as("count"),
             $"reps.scope" === $"count.scope" &&
-            $"reps.name" === $"count.name"
+            $"reps.name" === $"count.name",
+            "leftouter"
           )
           .select(
-            "reps.rse",
-            "reps._rse",
-            "reps.scope",
-            "reps.name",
-            "reps.adler32",
-            "reps.bytes",
-            "reps.created_at",
-            "reps.path",
-            "reps.updated_at",
-            "reps.state",
-            "reps.accessed_at",
-            "reps.tombstone",
-            "count.count"
+            $"reps.rse",
+            $"reps._rse",
+            $"reps.scope",
+            $"reps.name",
+            $"reps.adler32",
+            $"reps.bytes",
+            $"reps.created_at",
+            $"reps.path",
+            $"reps.updated_at",
+            $"reps.state",
+            $"reps.accessed_at",
+            $"reps.tombstone",
+            coalesce($"count.count", lit(0))
           )
 
         val ordered = add_replicas_count.orderBy(asc("path"))
