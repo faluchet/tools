@@ -3,7 +3,7 @@ package rucio
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.SparkContext._
-import org.apache.spark.sql.functions.{col, udf, asc, max, min, collect_list, concat_ws, lit, coalesce}
+import org.apache.spark.sql.functions.{col, udf, asc, max, min, when, collect_list, concat_ws, lit, coalesce}
 import org.apache.spark.sql.types.TimestampType
 import org.apache.hadoop.fs.{FileSystem,Path}
 
@@ -14,16 +14,19 @@ object DatasetsPerRSE {
             System.exit(1)
         }
 
+        val base_dir = "/user/rucio01"
+        val dumps_dir = "dumps"
+        val reports_dir = "reports"
         val date = args(0)
 
-        val spark = SparkSession.builder.appName("Rucio Consistency Datasets").getOrCreate()
+        val spark = SparkSession.builder.appName("Rucio Dataset Per RSE").getOrCreate()
         import spark.implicits._
         spark.conf.set("spark.sql.session.timeZone", "UTC")
 
         val dslocks = spark
           .read
           .format("avro")
-          .load("/user/rucio01/dumps/" + date + "/dslocks")
+          .load("%s/%s/%s/dslocks".format(base_dir, dumps_dir, date))
           .select(
             "scope",
             "name",
@@ -36,17 +39,27 @@ object DatasetsPerRSE {
             "rule_id",
             "updated_at"
           )
-        
+
         val collection_replicas = spark
           .read
           .format("avro")
-          .load("/user/rucio01/dumps/" + date + "/collection_replicas")
-          .select("scope", "name", "rse_id", "did_type", "available_bytes", "state", "created_at", "accessed_at", "updated_at")
+          .load("%s/%s/%s/collection_replicas".format(base_dir, dumps_dir, date))
+          .select(
+            "scope",
+            "name",
+            "rse_id",
+            "did_type",
+            "available_bytes",
+            "state",
+            "created_at",
+            "accessed_at",
+            "updated_at"
+          )
 
         val rses = spark
           .read
           .format("avro")
-          .load("/user/rucio01/dumps/" + date + "/rses")
+          .load("%s/%s/%s/rses".format(base_dir, dumps_dir, date))
         
         val filter_datasets = collection_replicas.filter("did_type = 'D'")
 
@@ -54,7 +67,9 @@ object DatasetsPerRSE {
           .as("reps")
           .join(
             dslocks.as("locks"),
-            (col("reps.scope") === col("locks.scope")) && (col("reps.name") === col("locks.name")) && (col("reps.rse_id") === col("locks.rse_id")),
+            $"reps.scope" === $"locks.scope" &&
+            $"reps.name" === $"locks.name" &&
+            $"reps.rse_id" === $"locks.rse_id",
             "leftouter"
           )
           .select(
@@ -75,7 +90,7 @@ object DatasetsPerRSE {
           as("reps")
           .join(
             rses.as("rses"),
-            col("reps.RSE_ID") === col("rses.ID")
+            $"reps.RSE_ID" === $"rses.ID"
           )
           .select(
             "rses.rse",
@@ -91,12 +106,11 @@ object DatasetsPerRSE {
             "reps.ds_created_at"
           )
 
-        
         val group_reps = join_reps_rses
           .orderBy(asc("ds_created_at"))
           .groupBy("scope", "name", "rse")
           .agg(
-            collect_list(col("account")).as("account"),
+            collect_list($"account").as("account"),
             max("bytes").as("bytes"),
             min("created_at").as("created_at"),
             max("updated_at").as("updated_at"),
@@ -105,36 +119,35 @@ object DatasetsPerRSE {
             max("state").as("state")
           )
 
-        val fill_na = group_reps.na.fill("None",Array("account")).na.fill(0,Array("bytes")).na.fill("",Array("rule_id"))    
-
-        val get_output = fill_na
+        val get_output = group_reps
           .select(
-            col("rse"),
-            col("rse").as("_rse"),
-            col("scope"),
-            col("name"),
-            concat_ws(",", col("account")),
-            col("bytes"),
-            col("created_at"),
-            col("updated_at"),
-            col("accessed_at"),
-            concat_ws(",", col("rule_id")),
-            col("state")
+            $"rse",
+            $"rse".as("_rse"),
+            $"scope",
+            $"name",
+            concat_ws(",", $"account").as("account"),
+            $"bytes",
+            $"created_at",
+            $"updated_at",
+            $"accessed_at",
+            concat_ws(",", $"rule_id"),
+            $"state"
           )
+          .withColumn("account", when($"account" === "", "None").otherwise($"account"))
+          .withColumn("bytes", when($"bytes".isNull, lit(0)).otherwise($"bytes"))
           .orderBy(
             asc("rse"),
             asc("scope"),
             asc("name")
           )
 
-        val output_path = "/user/rucio01/tmp/" + date + "/datasets_per_rse"
+        val output_path = "%s/%s/%s/datasets_per_rse".format(base_dir, reports_dir, date)
         get_output
           .repartition($"rse")
           .write
           .partitionBy("rse")
-          .mode("overwrite")
           .option("delimiter", "\t")
-          .option("timestampFormat", "yyyy-MM-dd HH:mm:ss")
+          .option("timestampFormat", "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
           .csv(output_path)
 
         val fs = FileSystem.get( spark.sparkContext.hadoopConfiguration )
