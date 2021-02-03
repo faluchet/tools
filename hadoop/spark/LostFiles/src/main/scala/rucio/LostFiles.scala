@@ -4,46 +4,51 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.SparkContext._
 import org.apache.spark.sql.functions.{col, udf, asc, max, min, collect_list, concat_ws, lit, coalesce}
-import org.apache.spark.sql.types.TimestampType
+import org.apache.spark.sql.types.{TimestampType, LongType}
 import org.apache.hadoop.fs.{FileSystem,Path}
 
-object DatasetsPerRSE { 
+object LostFiles {
     def main(args: Array[String]) {
-        if (args.length != 3) {
-            println("dump date, start and end date have to be specified")
+        if (args.length != 4) {
+            println("dump date, start, end date and report date have to be specified")
             System.exit(1)
         }
 
-        val date = args(0)
-        val start = args(1)
-        val end = args(2)
+        val base_dir = "/user/rucio01"
+        val dumps_dir = "dumps"
+        val reports_dir = "reports"
 
-        val spark = SparkSession.builder.appName("Rucio Consistency Datasets").getOrCreate()
+        val date = args(0)
+        val start = args(1).toLong
+        val end = args(2).toLong
+        val report_date = args(3)
+        val spark = SparkSession.builder.appName("Rucio Lost Files").getOrCreate()
 
         spark.conf.set("spark.sql.session.timeZone", "UTC")
         import spark.implicits._
-
-
         val bad_replicas = spark
           .read
           .format("avro")
-          .load("/user/rucio01/dumps/" + date + "/bad_replicas")
+          .load("%s/%s/%s/bad_replicas".format(base_dir, dumps_dir, date))
           .select(
             $"scope",
             $"name",
             $"rse_id",
             $"state",
             $"account",
-            $"updated_at".divide(1000)
+            $"updated_at".divide(1000).cast(LongType).as("updated_at"),
+            $"created_at".divide(1000).cast(LongType).as("created_at")
           )
-          .filter($"created_at" >= start)
-          .filter($"created_at" < end)
-          .filter("state = 'L'")
-        
+        .filter(
+          ($"created_at" >= start) &&
+          ($"created_at" < end) &&
+          ($"state" === "L")
+        )
+
         val contents_history = spark
           .read
           .format("avro")
-          .load("/user/rucio01/dumps/" + date + "/contents_history")
+          .load("%s/%s/%s/contents_history".format(base_dir, dumps_dir, date))
           .select(
             "scope",
             "name",
@@ -51,15 +56,19 @@ object DatasetsPerRSE {
             "child_name",
             "did_type"
           )
-          .filter("did_type = 'D'")
+          .filter($"did_type" === "D")
         
         val rses = spark
           .read
           .format("avro")
-          .load("/user/rucio01/dumps/" + date + "/rses")
+          .load("%s/%s/%s/rses".format(base_dir, dumps_dir, date))
         
         val get_lost_files = bad_replicas.as("bad_reps")
-          .join(contents_history.as("hist"), ($"bad_reps.scope" === $"hist.cscope") && ($"bad_reps.name" === $"hist.cname"))
+          .join(
+            contents_history.as("hist"),
+            ($"bad_reps.scope" === $"hist.child_scope") &&
+            ($"bad_reps.name" === $"hist.child_name")
+          )
           .select(
             $"bad_reps.scope".as("fscope"),
             $"bad_reps.name".as("fname"),
@@ -85,16 +94,12 @@ object DatasetsPerRSE {
             "files.updated_at"
           )
 
-        val output_path = "/user/rucio01/tmp/" + date + "/lost_files"
+        val output_path = "%s/%s/%s/lost_files.csv".format(base_dir, reports_dir, report_date)
         output
+          .repartition(1)
           .write
-          .mode("overwrite")
           .option("delimiter", "\t")
           .csv(output_path)
-
-        val fs = FileSystem.get( spark.sparkContext.hadoopConfiguration )
-        val stageDirs = fs.listStatus(new Path(output_path)).map( _.getPath.toString)
-        stageDirs.foreach( dir => fs.rename(new Path(dir),new Path(dir.replaceAll("rse=",""))))
 
         spark.stop()
     }

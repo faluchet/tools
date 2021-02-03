@@ -189,6 +189,7 @@ object GlobalAccounting {
             "rse_type",
             "tier",
             "accessed_at"
+            "tier"
           )
           .withColumnRenamed("_1","dscope")
           .withColumnRenamed("_2","dname")
