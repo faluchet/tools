@@ -90,7 +90,8 @@ object GlobalAccounting {
             $"name",
             $"rse_id",
             coalesce($"bytes", lit(0)).as("bytes"),
-            $"tombstone"
+            $"tombstone",
+            $"accessed_at"
           ).
           withColumn("type", when($"tombstone".isNull, lit("primary")).otherwise(lit("secondary")))
         
@@ -105,7 +106,8 @@ object GlobalAccounting {
             $"rses.rse",
             $"reps.type",
             $"rses.rse_type",
-            $"rses.tier"
+            $"rses.tier",
+            $"reps.accessed_at"
           )
 
         val contents = spark
@@ -136,7 +138,8 @@ object GlobalAccounting {
             $"reps.type",
             $"reps.bytes",
             $"reps.rse_type",
-            $"reps.tier"
+            $"reps.tier",
+            $"reps.accessed_at"
           )
           .filter("dscope != \"panda\"")
           .groupBy("fscope", "fname", "rse")
@@ -170,6 +173,7 @@ object GlobalAccounting {
             max("type").as("type"),
             max("rse_type").as("rse_type"),
             max("tier").as("tier"),
+            max("accessed_at").as("accessed_at"),
             collect_list($"dscope").as("dscopes"),
             collect_list($"dname").as("dnames")
           )
@@ -183,6 +187,8 @@ object GlobalAccounting {
             "bytes",
             "type",
             "rse_type",
+            "tier",
+            "accessed_at"
             "tier"
           )
           .withColumnRenamed("_1","dscope")
@@ -193,216 +199,376 @@ object GlobalAccounting {
           .groupBy("dscope", "dname")
           .agg(
             count("fname").as("prim_t0_files"),
-            sum("bytes").as("prim_t0_bytes")
+            count(when($"accessed_at".isNotNull, $"fname")).as("prim_t0_accessed_files"),
+            sum("bytes").as("prim_t0_bytes"),
+            sum(when($"accessed_at".isNotNull, $"bytes")).as("prim_t0_accessed_bytes"),
+            max("accessed_at").as("accessed_at")
           )
           .select(
             $"dscope",
             $"dname",
+            $"accessed_at",
             $"prim_t0_files",
             $"prim_t0_bytes",
+            $"prim_t0_accessed_files",
+            $"prim_t0_accessed_bytes",
             lit(0).as("prim_t1_files"),
             lit(0).as("prim_t1_bytes"),
+            lit(0).as("prim_t1_accessed_files"),
+            lit(0).as("prim_t1_accessed_bytes"),
             lit(0).as("prim_t2_files"),
             lit(0).as("prim_t2_bytes"),
+            lit(0).as("prim_t2_accessed_files"),
+            lit(0).as("prim_t2_accessed_bytes"),
             lit(0).as("secs_t0_files"),
             lit(0).as("secs_t0_bytes"),
+            lit(0).as("secs_t0_accessed_files"),
+            lit(0).as("secs_t0_accessed_bytes"),
             lit(0).as("secs_t1_files"),
             lit(0).as("secs_t1_bytes"),
+            lit(0).as("secs_t1_accessed_files"),
+            lit(0).as("secs_t1_accessed_bytes"),
             lit(0).as("secs_t2_files"),
             lit(0).as("secs_t2_bytes"),
+            lit(0).as("secs_t2_accessed_files"),
+            lit(0).as("secs_t2_accessed_bytes"),
             lit(0).as("tape_t0_files"),
             lit(0).as("tape_t0_bytes"),
+            lit(0).as("tape_t0_accessed_files"),
+            lit(0).as("tape_t0_accessed_bytes"),
             lit(0).as("tape_t1_files"),
-            lit(0).as("tape_t1_bytes")
+            lit(0).as("tape_t1_bytes"),
+            lit(0).as("tape_t1_accessed_files"),
+            lit(0).as("tape_t1_accessed_bytes")
           )
         val prims_t1 = one_ds
           .filter("type = \"primary\" AND rse_type = \"DISK\" and tier = \"1\"")
           .groupBy("dscope", "dname")
           .agg(
             count("fname").as("prim_t1_files"),
-            sum("bytes").as("prim_t1_bytes")
+            count(when($"accessed_at".isNotNull, $"fname")).as("prim_t1_accessed_files"),
+            sum("bytes").as("prim_t1_bytes"),
+            sum(when($"accessed_at".isNotNull, $"bytes")).as("prim_t1_accessed_bytes"),
+            max("accessed_at").as("accessed_at")
           )
           .select(
             $"dscope",
             $"dname",
+            $"accessed_at",
             lit(0).as("prim_t0_files"),
             lit(0).as("prim_t0_bytes"),
+            lit(0).as("prim_t0_accessed_files"),
+            lit(0).as("prim_t0_accessed_bytes"),
             $"prim_t1_files",
             $"prim_t1_bytes",
+            $"prim_t1_accessed_files",
+            $"prim_t1_accessed_bytes",
             lit(0).as("prim_t2_files"),
             lit(0).as("prim_t2_bytes"),
+            lit(0).as("prim_t2_accessed_files"),
+            lit(0).as("prim_t2_accessed_bytes"),
             lit(0).as("secs_t0_files"),
             lit(0).as("secs_t0_bytes"),
+            lit(0).as("secs_t0_accessed_files"),
+            lit(0).as("secs_t0_accessed_bytes"),
             lit(0).as("secs_t1_files"),
             lit(0).as("secs_t1_bytes"),
+            lit(0).as("secs_t1_accessed_files"),
+            lit(0).as("secs_t1_accessed_bytes"),
             lit(0).as("secs_t2_files"),
             lit(0).as("secs_t2_bytes"),
+            lit(0).as("secs_t2_accessed_files"),
+            lit(0).as("secs_t2_accessed_bytes"),
             lit(0).as("tape_t0_files"),
             lit(0).as("tape_t0_bytes"),
+            lit(0).as("tape_t0_accessed_files"),
+            lit(0).as("tape_t0_accessed_bytes"),
             lit(0).as("tape_t1_files"),
-            lit(0).as("tape_t1_bytes")
+            lit(0).as("tape_t1_bytes"),
+            lit(0).as("tape_t1_accessed_files"),
+            lit(0).as("tape_t1_accessed_bytes")
           )
         val prims_t2 = one_ds
           .filter("type = \"primary\" AND rse_type = \"DISK\" and tier = \"2\"")
           .groupBy("dscope", "dname")
           .agg(
             count("fname").as("prim_t2_files"),
-            sum("bytes").as("prim_t2_bytes")
+            count(when($"accessed_at".isNotNull, $"fname")).as("prim_t2_accessed_files"),
+            sum("bytes").as("prim_t2_bytes"),
+            sum(when($"accessed_at".isNotNull, $"bytes")).as("prim_t2_accessed_bytes"),
+            max("accessed_at").as("accessed_at")
           )
           .select(
             $"dscope",
             $"dname",
+            $"accessed_at",
             lit(0).as("prim_t0_files"),
             lit(0).as("prim_t0_bytes"),
+            lit(0).as("prim_t0_accessed_files"),
+            lit(0).as("prim_t0_accessed_bytes"),
             lit(0).as("prim_t1_files"),
             lit(0).as("prim_t1_bytes"),
+            lit(0).as("prim_t1_accessed_files"),
+            lit(0).as("prim_t1_accessed_bytes"),
             $"prim_t2_files",
             $"prim_t2_bytes",
+            $"prim_t2_accessed_files",
+            $"prim_t2_accessed_bytes",
             lit(0).as("secs_t0_files"),
             lit(0).as("secs_t0_bytes"),
+            lit(0).as("secs_t0_accessed_files"),
+            lit(0).as("secs_t0_accessed_bytes"),
             lit(0).as("secs_t1_files"),
             lit(0).as("secs_t1_bytes"),
+            lit(0).as("secs_t1_accessed_files"),
+            lit(0).as("secs_t1_accessed_bytes"),
             lit(0).as("secs_t2_files"),
             lit(0).as("secs_t2_bytes"),
+            lit(0).as("secs_t2_accessed_files"),
+            lit(0).as("secs_t2_accessed_bytes"),
             lit(0).as("tape_t0_files"),
             lit(0).as("tape_t0_bytes"),
+            lit(0).as("tape_t0_accessed_files"),
+            lit(0).as("tape_t0_accessed_bytes"),
             lit(0).as("tape_t1_files"),
-            lit(0).as("tape_t1_bytes")
+            lit(0).as("tape_t1_bytes"),
+            lit(0).as("tape_t1_accessed_files"),
+            lit(0).as("tape_t1_accessed_bytes")
           )
         val secs_t0 = one_ds
           .filter("type = \"secondary\" AND rse_type = \"DISK\" and tier = \"0\"")
           .groupBy("dscope", "dname")
           .agg(
             count("fname").as("secs_t0_files"),
-            sum("bytes").as("secs_t0_bytes")
+            count(when($"accessed_at".isNotNull, $"fname")).as("secs_t0_accessed_files"),
+            sum("bytes").as("secs_t0_bytes"),
+            sum(when($"accessed_at".isNotNull, $"bytes")).as("secs_t0_accessed_bytes"),
+            max("accessed_at").as("accessed_at")
           )
           .select(
             $"dscope",
             $"dname",
+            $"accessed_at",
             lit(0).as("prim_t0_files"),
             lit(0).as("prim_t0_bytes"),
+            lit(0).as("prim_t0_accessed_files"),
+            lit(0).as("prim_t0_accessed_bytes"),
             lit(0).as("prim_t1_files"),
             lit(0).as("prim_t1_bytes"),
+            lit(0).as("prim_t1_accessed_files"),
+            lit(0).as("prim_t1_accessed_bytes"),
             lit(0).as("prim_t2_files"),
             lit(0).as("prim_t2_bytes"),
+            lit(0).as("prim_t2_accessed_files"),
+            lit(0).as("prim_t2_accessed_bytes"),
             $"secs_t0_files",
             $"secs_t0_bytes",
+            $"secs_t0_accessed_files",
+            $"secs_t0_accessed_bytes",
             lit(0).as("secs_t1_files"),
             lit(0).as("secs_t1_bytes"),
+            lit(0).as("secs_t1_accessed_files"),
+            lit(0).as("secs_t1_accessed_bytes"),
             lit(0).as("secs_t2_files"),
             lit(0).as("secs_t2_bytes"),
+            lit(0).as("secs_t2_accessed_files"),
+            lit(0).as("secs_t2_accessed_bytes"),
             lit(0).as("tape_t0_files"),
             lit(0).as("tape_t0_bytes"),
+            lit(0).as("tape_t0_accessed_files"),
+            lit(0).as("tape_t0_accessed_bytes"),
             lit(0).as("tape_t1_files"),
-            lit(0).as("tape_t1_bytes")
+            lit(0).as("tape_t1_bytes"),
+            lit(0).as("tape_t1_accessed_files"),
+            lit(0).as("tape_t1_accessed_bytes")
           )
         val secs_t1 = one_ds
           .filter("type = \"secondary\" AND rse_type = \"DISK\" and tier = \"1\"")
           .groupBy("dscope", "dname")
           .agg(
             count("fname").as("secs_t1_files"),
-            sum("bytes").as("secs_t1_bytes")
+            count(when($"accessed_at".isNotNull, $"fname")).as("secs_t1_accessed_files"),
+            sum("bytes").as("secs_t1_bytes"),
+            sum(when($"accessed_at".isNotNull, $"bytes")).as("secs_t1_accessed_bytes"),
+            max("accessed_at").as("accessed_at")
           )
           .select(
             $"dscope",
             $"dname",
+            $"accessed_at",
             lit(0).as("prim_t0_files"),
             lit(0).as("prim_t0_bytes"),
+            lit(0).as("prim_t0_accessed_files"),
+            lit(0).as("prim_t0_accessed_bytes"),
             lit(0).as("prim_t1_files"),
             lit(0).as("prim_t1_bytes"),
+            lit(0).as("prim_t1_accessed_files"),
+            lit(0).as("prim_t1_accessed_bytes"),
             lit(0).as("prim_t2_files"),
             lit(0).as("prim_t2_bytes"),
+            lit(0).as("prim_t2_accessed_files"),
+            lit(0).as("prim_t2_accessed_bytes"),
             lit(0).as("secs_t0_files"),
             lit(0).as("secs_t0_bytes"),
+            lit(0).as("secs_t0_accessed_files"),
+            lit(0).as("secs_t0_accessed_bytes"),
             $"secs_t1_files",
             $"secs_t1_bytes",
+            $"secs_t1_accessed_files",
+            $"secs_t1_accessed_bytes",
             lit(0).as("secs_t2_files"),
             lit(0).as("secs_t2_bytes"),
+            lit(0).as("secs_t2_accessed_files"),
+            lit(0).as("secs_t2_accessed_bytes"),
             lit(0).as("tape_t0_files"),
             lit(0).as("tape_t0_bytes"),
+            lit(0).as("tape_t0_accessed_files"),
+            lit(0).as("tape_t0_accessed_bytes"),
             lit(0).as("tape_t1_files"),
-            lit(0).as("tape_t1_bytes")
+            lit(0).as("tape_t1_bytes"),
+            lit(0).as("tape_t1_accessed_files"),
+            lit(0).as("tape_t1_accessed_bytes")
           )
         val secs_t2 = one_ds
           .filter("type = \"secondary\" AND rse_type = \"DISK\" and tier = \"2\"")
           .groupBy("dscope", "dname")
           .agg(
             count("fname").as("secs_t2_files"),
-            sum("bytes").as("secs_t2_bytes")
+            count(when($"accessed_at".isNotNull, $"fname")).as("secs_t2_accessed_files"),
+            sum("bytes").as("secs_t2_bytes"),
+            sum(when($"accessed_at".isNotNull, $"bytes")).as("secs_t2_accessed_bytes"),
+            max("accessed_at").as("accessed_at")
           )
           .select(
             $"dscope",
             $"dname",
+            $"accessed_at",
             lit(0).as("prim_t0_files"),
             lit(0).as("prim_t0_bytes"),
+            lit(0).as("prim_t0_accessed_files"),
+            lit(0).as("prim_t0_accessed_bytes"),
             lit(0).as("prim_t1_files"),
             lit(0).as("prim_t1_bytes"),
+            lit(0).as("prim_t1_accessed_files"),
+            lit(0).as("prim_t1_accessed_bytes"),
             lit(0).as("prim_t2_files"),
             lit(0).as("prim_t2_bytes"),
+            lit(0).as("prim_t2_accessed_files"),
+            lit(0).as("prim_t2_accessed_bytes"),
             lit(0).as("secs_t0_files"),
             lit(0).as("secs_t0_bytes"),
+            lit(0).as("secs_t0_accessed_files"),
+            lit(0).as("secs_t0_accessed_bytes"),
             lit(0).as("secs_t1_files"),
             lit(0).as("secs_t1_bytes"),
+            lit(0).as("secs_t1_accessed_files"),
+            lit(0).as("secs_t1_accessed_bytes"),
             $"secs_t2_files",
             $"secs_t2_bytes",
+            $"secs_t2_accessed_files",
+            $"secs_t2_accessed_bytes",
             lit(0).as("tape_t0_files"),
             lit(0).as("tape_t0_bytes"),
+            lit(0).as("tape_t0_accessed_files"),
+            lit(0).as("tape_t0_accessed_bytes"),
             lit(0).as("tape_t1_files"),
-            lit(0).as("tape_t1_bytes")
+            lit(0).as("tape_t1_bytes"),
+            lit(0).as("tape_t1_accessed_files"),
+            lit(0).as("tape_t1_accessed_bytes")
           )
         val tape_t0 = one_ds
           .filter("rse_type = \"TAPE\" and tier = \"0\"")
           .groupBy("dscope", "dname")
           .agg(
             count("fname").as("tape_t0_files"),
-            sum("bytes").as("tape_t0_bytes")
+            count(when($"accessed_at".isNotNull, $"fname")).as("tape_t0_accessed_files"),
+            sum("bytes").as("tape_t0_bytes"),
+            sum(when($"accessed_at".isNotNull, $"bytes")).as("tape_t0_accessed_bytes"),
+            max("accessed_at").as("accessed_at")
           )
           .select(
             $"dscope",
             $"dname",
+            $"accessed_at",
             lit(0).as("prim_t0_files"),
             lit(0).as("prim_t0_bytes"),
+            lit(0).as("prim_t0_accessed_files"),
+            lit(0).as("prim_t0_accessed_bytes"),
             lit(0).as("prim_t1_files"),
             lit(0).as("prim_t1_bytes"),
+            lit(0).as("prim_t1_accessed_files"),
+            lit(0).as("prim_t1_accessed_bytes"),
             lit(0).as("prim_t2_files"),
             lit(0).as("prim_t2_bytes"),
+            lit(0).as("prim_t2_accessed_files"),
+            lit(0).as("prim_t2_accessed_bytes"),
             lit(0).as("secs_t0_files"),
             lit(0).as("secs_t0_bytes"),
+            lit(0).as("secs_t0_accessed_files"),
+            lit(0).as("secs_t0_accessed_bytes"),
             lit(0).as("secs_t1_files"),
             lit(0).as("secs_t1_bytes"),
+            lit(0).as("secs_t1_accessed_files"),
+            lit(0).as("secs_t1_accessed_bytes"),
             lit(0).as("secs_t2_files"),
             lit(0).as("secs_t2_bytes"),
+            lit(0).as("secs_t2_accessed_files"),
+            lit(0).as("secs_t2_accessed_bytes"),
             $"tape_t0_files",
             $"tape_t0_bytes",
+            $"tape_t0_accessed_files",
+            $"tape_t0_accessed_bytes",
             lit(0).as("tape_t1_files"),
-            lit(0).as("tape_t1_bytes")
+            lit(0).as("tape_t1_bytes"),
+            lit(0).as("tape_t1_accessed_files"),
+            lit(0).as("tape_t1_accessed_bytes")
           )
         val tape_t1 = one_ds
           .filter("rse_type = \"TAPE\" and tier = \"1\"")
           .groupBy("dscope", "dname")
           .agg(
             count("fname").as("tape_t1_files"),
-            sum("bytes").as("tape_t1_bytes")
+            count(when($"accessed_at".isNotNull, $"fname")).as("tape_t1_accessed_files"),
+            sum("bytes").as("tape_t1_bytes"),
+            sum(when($"accessed_at".isNotNull, $"bytes")).as("tape_t1_accessed_bytes"),
+            max("accessed_at").as("accessed_at")
           )
           .select(
             $"dscope",
             $"dname",
+            $"accessed_at",
             lit(0).as("prim_t0_files"),
             lit(0).as("prim_t0_bytes"),
+            lit(0).as("prim_t0_accessed_files"),
+            lit(0).as("prim_t0_accessed_bytes"),
             lit(0).as("prim_t1_files"),
             lit(0).as("prim_t1_bytes"),
+            lit(0).as("prim_t1_accessed_files"),
+            lit(0).as("prim_t1_accessed_bytes"),
             lit(0).as("prim_t2_files"),
             lit(0).as("prim_t2_bytes"),
+            lit(0).as("prim_t2_accessed_files"),
+            lit(0).as("prim_t2_accessed_bytes"),
             lit(0).as("secs_t0_files"),
             lit(0).as("secs_t0_bytes"),
+            lit(0).as("secs_t0_accessed_files"),
+            lit(0).as("secs_t0_accessed_bytes"),
             lit(0).as("secs_t1_files"),
             lit(0).as("secs_t1_bytes"),
+            lit(0).as("secs_t1_accessed_files"),
+            lit(0).as("secs_t1_accessed_bytes"),
             lit(0).as("secs_t2_files"),
             lit(0).as("secs_t2_bytes"),
+            lit(0).as("secs_t2_accessed_files"),
+            lit(0).as("secs_t2_accessed_bytes"),
             lit(0).as("tape_t0_files"),
             lit(0).as("tape_t0_bytes"),
+            lit(0).as("tape_t0_accessed_files"),
+            lit(0).as("tape_t0_accessed_bytes"),
             $"tape_t1_files",
-            $"tape_t1_bytes"
+            $"tape_t1_bytes",
+            $"tape_t1_accessed_files",
+            $"tape_t1_accessed_bytes"
           )
 
         val union_all = prims_t0.union(prims_t1).union(prims_t2).union(secs_t0).union(secs_t1).union(secs_t2).union(tape_t0).union(tape_t1)
@@ -410,20 +576,37 @@ object GlobalAccounting {
           .agg(
             max("prim_t0_files").as("prim_t0_files"),
             max("prim_t0_bytes").as("prim_t0_bytes"),
+            max("prim_t0_accessed_files").as("prim_t0_accessed_files"),
+            max("prim_t0_accessed_bytes").as("prim_t0_accessed_bytes"),
             max("prim_t1_files").as("prim_t1_files"),
             max("prim_t1_bytes").as("prim_t1_bytes"),
+            max("prim_t1_accessed_files").as("prim_t1_accessed_files"),
+            max("prim_t1_accessed_bytes").as("prim_t1_accessed_bytes"),
             max("prim_t2_files").as("prim_t2_files"),
             max("prim_t2_bytes").as("prim_t2_bytes"),
+            max("prim_t2_accessed_files").as("prim_t2_accessed_files"),
+            max("prim_t2_accessed_bytes").as("prim_t2_accessed_bytes"),
             max("secs_t0_files").as("secs_t0_files"),
             max("secs_t0_bytes").as("secs_t0_bytes"),
+            max("secs_t0_accessed_files").as("secs_t0_accessed_files"),
+            max("secs_t0_accessed_bytes").as("secs_t0_accessed_bytes"),
             max("secs_t1_files").as("secs_t1_files"),
             max("secs_t1_bytes").as("secs_t1_bytes"),
+            max("secs_t1_accessed_files").as("secs_t1_accessed_files"),
+            max("secs_t1_accessed_bytes").as("secs_t1_accessed_bytes"),
             max("secs_t2_files").as("secs_t2_files"),
             max("secs_t2_bytes").as("secs_t2_bytes"),
+            max("secs_t2_accessed_files").as("secs_t2_accessed_files"),
+            max("secs_t2_accessed_bytes").as("secs_t2_accessed_bytes"),
             max("tape_t0_files").as("tape_t0_files"),
             max("tape_t0_bytes").as("tape_t0_bytes"),
+            max("tape_t0_accessed_files").as("tape_t0_accessed_files"),
+            max("tape_t0_accessed_bytes").as("tape_t0_accessed_bytes"),
             max("tape_t1_files").as("tape_t1_files"),
-            max("tape_t1_bytes").as("tape_t1_bytes")
+            max("tape_t1_bytes").as("tape_t1_bytes"),
+            max("tape_t1_accessed_files").as("tape_t1_accessed_files"),
+            max("tape_t1_accessed_bytes").as("tape_t1_accessed_bytes"),
+            max("accessed_at").as("accessed_at")
           )
         
         val dids = spark
@@ -442,7 +625,8 @@ object GlobalAccounting {
             $"stream_name",
             $"version",
             $"campaign",
-            coalesce($"events", lit(0)).as("events").cast(LongType)
+            coalesce($"events", lit(0)).as("events").cast(LongType),
+            $"created_at"
           )
 
         val get_repl_factor = union_all.as("reps")
@@ -455,24 +639,42 @@ object GlobalAccounting {
           .select(
             $"reps.dscope".as("scope"),
             $"reps.dname".as("name"),
+            $"reps.accessed_at".as("accessed_at"),
+            $"dids.created_at".as("created_at"),
             coalesce($"dids.length", lit(0)),
             coalesce($"dids.bytes", lit(0)),
             $"reps.prim_t0_files",
+            $"reps.prim_t0_accessed_files",
             $"reps.prim_t1_files",
+            $"reps.prim_t1_accessed_files",
             $"reps.prim_t2_files",
+            $"reps.prim_t2_accessed_files",
             $"reps.secs_t0_files",
+            $"reps.secs_t0_accessed_files",
             $"reps.secs_t1_files",
+            $"reps.secs_t1_accessed_files",
             $"reps.secs_t2_files",
+            $"reps.secs_t2_accessed_files",
             $"reps.tape_t0_files",
+            $"reps.tape_t0_accessed_files",
             $"reps.tape_t1_files",
+            $"reps.tape_t1_accessed_files",
             $"reps.prim_t0_bytes",
+            $"reps.prim_t0_accessed_bytes",
             $"reps.prim_t1_bytes",
+            $"reps.prim_t1_accessed_bytes",
             $"reps.prim_t2_bytes",
+            $"reps.prim_t2_accessed_bytes",
             $"reps.secs_t0_bytes",
+            $"reps.secs_t0_accessed_bytes",
             $"reps.secs_t1_bytes",
+            $"reps.secs_t1_accessed_bytes",
             $"reps.secs_t2_bytes",
+            $"reps.secs_t2_accessed_bytes",
             $"reps.tape_t0_bytes",
+            $"reps.tape_t0_accessed_bytes",
             $"reps.tape_t1_bytes",
+            $"reps.tape_t1_accessed_bytes",
             ($"reps.prim_t0_files" / $"dids.length").as("prim_repl_factor_t0"),
             ($"reps.prim_t1_files" / $"dids.length").as("prim_repl_factor_t1"),
             ($"reps.prim_t2_files" / $"dids.length").as("prim_repl_factor_t2"),
