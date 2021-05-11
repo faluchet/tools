@@ -91,7 +91,7 @@ object GlobalAccounting {
             $"rse_id",
             coalesce($"bytes", lit(0)).as("bytes"),
             $"tombstone",
-            $"accessed_at"
+            coalesce($"accessed_at", lit(0)).as("accessed_at").cast(LongType)
           ).
           withColumn("type", when($"tombstone".isNull, lit("primary")).otherwise(lit("secondary")))
         
@@ -625,8 +625,17 @@ object GlobalAccounting {
             $"version",
             $"campaign",
             coalesce($"events", lit(0)).as("events").cast(LongType),
-            $"created_at"
+            $"created_at",
+            coalesce($"accessed_at", lit(0)).as("accessed_at").cast(LongType)
           )
+
+        val get_max_accessed_at = udf((reps:Long, dids:Long) => {
+            if (reps > dids) {
+              reps
+            } else {
+              dids
+            }
+        })
 
         val get_repl_factor = union_all.as("reps")
           .join(
@@ -638,7 +647,7 @@ object GlobalAccounting {
           .select(
             $"reps.dscope".as("scope"),
             $"reps.dname".as("name"),
-            $"reps.accessed_at".as("accessed_at"),
+            get_max_accessed_at($"reps.accessed_at", $"dids.accessed_at").as("accessed_at"),
             $"dids.created_at".as("created_at"),
             coalesce($"dids.length", lit(0)),
             coalesce($"dids.bytes", lit(0)),
@@ -691,6 +700,7 @@ object GlobalAccounting {
             $"dids.campaign",
             coalesce($"dids.events", lit(0))
           )
+          .withColumn("accessed_at", when($"accessed_at" > 0, $"accessed_at"))
           .orderBy(asc("scope"), asc("name"))
 
         val output_path = "%s/%s/%s/global_accounting".format(base_dir, reports_dir, date)
