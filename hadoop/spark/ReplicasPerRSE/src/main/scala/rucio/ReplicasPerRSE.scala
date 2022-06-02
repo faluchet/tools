@@ -31,9 +31,7 @@ object ReplicasPerRSE {
 
         val spark = SparkSession.builder.appName("Rucio Replicas per RSE").getOrCreate()
         spark.conf.set("spark.sql.session.timeZone", "UTC")
-        spark.conf.set("spark.executor.memory", "8G")
-        spark.conf.set("spark.sql.shuffle.partitions", "100")
-        spark.conf.set("spark.dynamicAllocation.maxExecutors", "200")
+        spark.conf.set("spark.sql.shuffle.partitions", "300")
         import spark.implicits._
 
         val replicas = spark
