@@ -1,9 +1,9 @@
 name := "ConsistencyDatasets"
  
-version := "1.1"
+version := "1.2"
  
-scalaVersion := "2.12.15"
+scalaVersion := "2.12.17"
  
-libraryDependencies += "org.apache.spark" %% "spark-core" % "3.2.1"
-libraryDependencies += "org.apache.spark" %% "spark-sql" % "3.2.1"
-libraryDependencies += "org.apache.spark" %% "spark-avro" % "3.2.1"
+libraryDependencies += "org.apache.spark" %% "spark-core" % "3.4.0"
+libraryDependencies += "org.apache.spark" %% "spark-sql" % "3.4.0"
+libraryDependencies += "org.apache.spark" %% "spark-avro" % "3.4.0"
