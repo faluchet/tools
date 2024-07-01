@@ -101,7 +101,7 @@ object CopyToOS {
             tType
         })
 
-        val spark = SparkSession.builder.appName("Rucio Copy Global Accounting To ES").getOrCreate()
+        val spark = SparkSession.builder.appName("Rucio Copy Global Accounting To OpenSearch").getOrCreate()
 
         spark.conf.set("spark.sql.session.timeZone", "UTC")
 
