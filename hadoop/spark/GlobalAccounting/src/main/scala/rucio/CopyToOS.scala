@@ -197,7 +197,7 @@ object CopyToOS {
           .withColumn("id", generate_id($"timestamp", $"scope", $"name"))
           .withColumn("datatype_grouped", get_datatype($"project", $"datatype"))
 
-        val osIndex = "atlas_ddm-global-accounting-" + month + "/_doc"
+        val osIndex = "atlas_ddm-global-accounting-" + month + "/"
         df.saveToOpenSearch(osIndex)
     }
 }
